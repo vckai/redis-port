@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	redigo "github.com/garyburd/redigo/redis"
 	"github.com/CodisLabs/redis-port/pkg/libs/atomic2"
 	"github.com/CodisLabs/redis-port/pkg/libs/errors"
 	"github.com/CodisLabs/redis-port/pkg/libs/log"
 	"github.com/CodisLabs/redis-port/pkg/libs/stats"
 	"github.com/CodisLabs/redis-port/pkg/rdb"
 	"github.com/CodisLabs/redis-port/pkg/redis"
+	redigo "github.com/garyburd/redigo/redis"
 )
 
 func openRedisConn(target, passwd string) redigo.Conn {
@@ -192,6 +192,13 @@ func selectDB(c redigo.Conn, db uint32) {
 }
 
 func restoreRdbEntry(c redigo.Conn, e *rdb.BinEntry) {
+
+	// 过滤key前缀
+	// 迁移指定前缀的keys
+	if len(args.prefix) != 0 && !strings.HasPrefix(string(e.Key), args.prefix) {
+		return
+	}
+
 	var ttlms uint64
 	if e.ExpireAt != 0 {
 		now := uint64(time.Now().Add(args.shift).UnixNano())
@@ -202,12 +209,27 @@ func restoreRdbEntry(c redigo.Conn, e *rdb.BinEntry) {
 			ttlms = e.ExpireAt - now
 		}
 	}
-	s, err := redigo.String(c.Do("slotsrestore", e.Key, ttlms, e.Value))
-	if err != nil {
-		log.PanicError(err, "restore command error")
+
+	// 是否替换目标redis的keys
+	if args.replace || args.delete {
+		_, err := redigo.String(c.Do("del", e.Key))
+		if err != nil {
+			log.Println(err, "delete target key error")
+		}
 	}
-	if s != "OK" {
-		log.Panicf("restore command response = '%s', should be 'OK'", s)
+
+	if !args.delete {
+		s, err := redigo.String(c.Do("restore", e.Key, ttlms, e.Value))
+		if err != nil {
+			// 跳过key存在错误
+			if strings.Contains(err.Error(), "Target key name") {
+				return
+			}
+			log.PanicError(err, "restore command error")
+		}
+		if s != "OK" {
+			log.Panicf("restore command response = '%s', should be 'OK'", s)
+		}
 	}
 }
 

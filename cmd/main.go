@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	"github.com/CodisLabs/redis-port/pkg/libs/bytesize"
 	"github.com/CodisLabs/redis-port/pkg/libs/errors"
 	"github.com/CodisLabs/redis-port/pkg/libs/log"
+	"github.com/docopt/docopt-go"
 )
 
 var args struct {
@@ -25,6 +25,12 @@ var args struct {
 	auth   string
 	target string
 	extra  bool
+
+	replace bool
+	delete  bool
+	prefix  string
+
+	version int
 
 	sockfile string
 	filesize int64
@@ -64,7 +70,7 @@ Usage:
 	redis-port decode   [--ncpu=N]  [--parallel=M]  [--input=INPUT]  [--output=OUTPUT]
 	redis-port restore  [--ncpu=N]  [--parallel=M]  [--input=INPUT]   --target=TARGET   [--auth=AUTH]  [--extra] [--faketime=FAKETIME]  [--filterdb=DB]
 	redis-port dump     [--ncpu=N]  [--parallel=M]   --from=MASTER   [--password=PASSWORD]  [--output=OUTPUT]  [--extra]
-	redis-port sync     [--ncpu=N]  [--parallel=M]   --from=MASTER   [--password=PASSWORD]   --target=TARGET   [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]] [--filterdb=DB] [--psync]
+	redis-port sync     [--ncpu=N]  [--parallel=M]   --from=MASTER   [--password=PASSWORD]   --target=TARGET   [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]] [--filterdb=DB] [--psync] [--replace] [--delete] [--prefix=PREFIX]
 
 Options:
 	-n N, --ncpu=N                    Set runtime.GOMAXPROCS to N.
@@ -81,6 +87,9 @@ Options:
 	-e, --extra                       Set ture to send/receive following redis commands, default is false.
 	--filterdb=DB                     Filter db = DB, default is *.
 	--psync                           Use PSYNC command.
+	--delete                          Delete From Redis keys.
+	--replace                         Replace Target Redis keys.
+	--prefix=PREFIX                   Match Prefix keys.
 `
 	d, err := docopt.Parse(usage, nil, true, "", false)
 	if err != nil {
@@ -121,6 +130,10 @@ Options:
 	args.extra, _ = d["--extra"].(bool)
 	args.psync, _ = d["--psync"].(bool)
 	args.sockfile, _ = d["--sockfile"].(string)
+
+	args.replace, _ = d["--replace"].(bool)
+	args.delete, _ = d["--delete"].(bool)
+	args.prefix, _ = d["--prefix"].(string)
 
 	if s, ok := d["--faketime"].(string); ok && s != "" {
 		switch s[0] {

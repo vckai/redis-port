@@ -26,7 +26,7 @@ redis-port dump     [--ncpu=N]   --from=MASTER   [--password=PASSWORD]  [--outpu
 * **SYNC** data from master to slave
 
 ```sh
-redis-port sync     [--ncpu=N]   --from=MASTER   [--password=PASSWORD]  --target=TARGET  [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]]  [--filterdb=DB]  [--psync]
+redis-port sync     [--ncpu=N]   --from=MASTER   [--password=PASSWORD]  --target=TARGET  [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]]  [--filterdb=DB]  [--psync] [--replace] [--delete] [--prefix=PREFIX]
 ```
 
 Options
@@ -124,6 +124,27 @@ $ ./redis-port dump -f 127.0.0.1:6379 | tee save.rdb | ./redis-port decode -o sa
 
 ```sh
 $ ./redis-port sync -f 127.0.0.1:6379 -t 127.0.0.1:6380 -n 8
+  2014/10/28 15:15:41 [ncpu=8] sync from '127.0.0.1:6379' to '127.0.0.1:6380'
+  2014/10/28 15:15:42 -
+  2014/10/28 15:15:43 -
+  2014/10/28 15:15:44 -
+  2014/10/28 15:15:46 total = 278110192 -      9380927 [  3%]
+  2014/10/28 15:15:47 total = 278110192 -     18605075 [  6%]
+  ... ...                                              [    ]
+  2014/10/28 15:16:14 total = 278110192 -    269990892 [ 97%]
+  2014/10/28 15:16:15 total = 278110192 -    278110192 [100%]
+  2014/10/28 15:16:15 done
+  2014/10/28 15:16:17 pipe: send = 0             recv = 0
+  2014/10/28 15:16:18 pipe: send = 0             recv = 0
+  ... ...
+```
+
+* **DELETE**
+
+`-t` 和 `-f`需要指向同一台机器
+
+```sh
+$ ./redis-port sync -f 127.0.0.1:6379 -t 127.0.0.1:6379 -n 1 --delete
   2014/10/28 15:15:41 [ncpu=8] sync from '127.0.0.1:6379' to '127.0.0.1:6380'
   2014/10/28 15:15:42 -
   2014/10/28 15:15:43 -

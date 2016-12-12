@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/CodisLabs/redis-port/pkg/libs/atomic2"
@@ -88,7 +89,11 @@ func (cmd *cmdSync) Main() {
 	reader := bufio.NewReaderSize(input, ReaderBufferSize)
 
 	cmd.SyncRDBFile(reader, target, args.auth, nsize)
-	cmd.SyncCommand(reader, target, args.auth)
+
+	// 删除操作不支持增量执行
+	if !args.delete {
+		cmd.SyncCommand(reader, target, args.auth)
+	}
 }
 
 func (cmd *cmdSync) SendSyncCmd(master, passwd string) (net.Conn, int64) {
@@ -255,19 +260,25 @@ func (cmd *cmdSync) SyncCommand(reader *bufio.Reader, target, passwd string) {
 		var bypass bool = false
 		for {
 			resp := redis.MustDecode(reader)
-			if scmd, args, err := redis.ParseArgs(resp); err != nil {
+			if scmd, keys, err := redis.ParseArgs(resp); err != nil {
 				log.PanicError(err, "parse command arguments failed")
 			} else if scmd != "ping" {
 				if scmd == "select" {
-					if len(args) != 1 {
-						log.Panicf("select command len(args) = %d", len(args))
+					if len(keys) != 1 {
+						log.Panicf("select command len(args) = %d", len(keys))
 					}
-					s := string(args[0])
+					s := string(keys[0])
 					n, err := parseInt(s, MinDB, MaxDB)
 					if err != nil {
 						log.PanicErrorf(err, "parse db = %s failed", s)
 					}
 					bypass = !acceptDB(uint32(n))
+				}
+				// 过滤key前缀
+				// 迁移指定前缀的keys
+				if len(args.prefix) != 0 && !strings.HasPrefix(string(keys[0]), args.prefix) {
+					cmd.nbypass.Incr()
+					continue
 				}
 				if bypass {
 					cmd.nbypass.Incr()
@@ -284,7 +295,7 @@ func (cmd *cmdSync) SyncCommand(reader *bufio.Reader, target, passwd string) {
 		time.Sleep(time.Second)
 		nstat := cmd.Stat()
 		var b bytes.Buffer
-		fmt.Fprintf(&b, "sync: ")
+		fmt.Fprintf(&b, "syncCommand: ")
 		fmt.Fprintf(&b, " +forward=%-6d", nstat.forward-lstat.forward)
 		fmt.Fprintf(&b, " +nbypass=%-6d", nstat.nbypass-lstat.nbypass)
 		fmt.Fprintf(&b, " +nbytes=%d", nstat.wbytes-lstat.wbytes)
