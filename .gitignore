@@ -10,6 +10,6 @@
 /Godeps/_workspace
 .htaccess
 
-/bin
+#/bin
 
 makefile
