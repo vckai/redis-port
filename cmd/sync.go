@@ -19,12 +19,15 @@ import (
 	"github.com/CodisLabs/redis-port/pkg/libs/log"
 	"github.com/CodisLabs/redis-port/pkg/libs/stats"
 	"github.com/CodisLabs/redis-port/pkg/redis"
+	redigo "github.com/garyburd/redigo/redis"
 )
 
 type cmdSync struct {
 	rbytes, wbytes, nentry, ignore atomic2.Int64
 
 	forward, nbypass atomic2.Int64
+
+	preKeys map[string]bool
 }
 
 type cmdSyncStat struct {
@@ -191,30 +194,44 @@ func (cmd *cmdSync) PSyncPipeCopy(c net.Conn, br *bufio.Reader, bw *bufio.Writer
 	}
 }
 
+// 全量同步redis命令
 func (cmd *cmdSync) SyncRDBFile(reader *bufio.Reader, target, passwd string, nsize int64) {
 	pipe := newRDBLoader(reader, &cmd.rbytes, args.parallel*32)
 	wait := make(chan struct{})
+
 	go func() {
 		defer close(wait)
-		group := make(chan int, args.parallel)
+		group := make(chan int, 100)
 		for i := 0; i < cap(group); i++ {
 			go func() {
 				defer func() {
 					group <- 0
 				}()
-				c := openRedisConn(target, passwd)
-				defer c.Close()
+
+				// 实例化建立多个实例
+				targets := strings.Split(target, ",")
+				var redisConns []redigo.Conn
+				for _, _target := range targets {
+					c := openRedisConn(_target, passwd)
+					defer c.Close()
+					redisConns = append(redisConns, c)
+				}
+				redisLen := len(redisConns)
+
 				var lastdb uint32 = 0
 				for e := range pipe {
 					if !acceptDB(e.DB) {
 						cmd.ignore.Incr()
 					} else {
+						// 根据phpredis hash算法计算key所在的redis实例
+						pos := findNode(string(e.Key), redisLen)
+						c := redisConns[pos]
 						cmd.nentry.Incr()
 						if e.DB != lastdb {
 							lastdb = e.DB
 							selectDB(c, lastdb)
 						}
-						restoreRdbEntry(c, e)
+						restoreRdbEntry(c, e, pos)
 					}
 				}
 			}()
@@ -242,52 +259,71 @@ func (cmd *cmdSync) SyncRDBFile(reader *bufio.Reader, target, passwd string, nsi
 	log.Info("sync rdb done")
 }
 
+// 增量同步命令
 func (cmd *cmdSync) SyncCommand(reader *bufio.Reader, target, passwd string) {
-	c := openNetConn(target, passwd)
-	defer c.Close()
+	// 实例化建立多个实例
+	targets := strings.Split(target, ",")
+	var writers []*bufio.Writer
+	for _, _target := range targets {
+		c := openNetConn(_target, passwd)
+		defer c.Close()
+		writer := bufio.NewWriterSize(stats.NewCountWriter(c, &cmd.wbytes), WriterBufferSize)
+		defer flushWriter(writer)
 
-	writer := bufio.NewWriterSize(stats.NewCountWriter(c, &cmd.wbytes), WriterBufferSize)
-	defer flushWriter(writer)
+		writers = append(writers, writer)
 
-	go func() {
-		p := make([]byte, ReaderBufferSize)
-		for {
-			iocopy(c, ioutil.Discard, p, len(p))
-		}
-	}()
+		go func() {
+			p := make([]byte, ReaderBufferSize)
+			for {
+				iocopy(c, ioutil.Discard, p, len(p))
+			}
+		}()
+	}
+
+	writerLen := len(writers)
 
 	go func() {
 		var bypass bool = false
 		for {
+			var writer *bufio.Writer
+
 			resp := redis.MustDecode(reader)
 			if scmd, keys, err := redis.ParseArgs(resp); err != nil {
 				log.PanicError(err, "parse command arguments failed")
 			} else if scmd != "ping" {
+				key := string(keys[0])
 				if scmd == "select" {
 					if len(keys) != 1 {
 						log.Panicf("select command len(args) = %d", len(keys))
 					}
-					s := string(keys[0])
-					n, err := parseInt(s, MinDB, MaxDB)
+					n, err := parseInt(key, MinDB, MaxDB)
 					if err != nil {
-						log.PanicErrorf(err, "parse db = %s failed", s)
+						log.PanicErrorf(err, "parse db = %s failed", key)
 					}
 					bypass = !acceptDB(uint32(n))
 				}
 				// 过滤key前缀
 				// 迁移指定前缀的keys
-				if len(args.prefix) != 0 && !strings.HasPrefix(string(keys[0]), args.prefix) {
+				if bypass || !inPrefixKeys(keys[0]) {
 					cmd.nbypass.Incr()
 					continue
 				}
-				if bypass {
-					cmd.nbypass.Incr()
-					continue
-				}
+
+				// 查找hash redis实例
+				pos := findNode(key, writerLen)
+				writer = writers[pos]
 			}
+
 			cmd.forward.Incr()
-			redis.MustEncode(writer, resp)
-			flushWriter(writer)
+			if writer == nil {
+				for _, wri := range writers {
+					redis.MustEncode(wri, resp)
+					flushWriter(wri)
+				}
+			} else {
+				redis.MustEncode(writer, resp)
+				flushWriter(writer)
+			}
 		}
 	}()
 

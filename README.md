@@ -1,5 +1,17 @@
-redis-port
+新增功能
 ===========
+
+项目来源https://github.com/CodisLabs/redis-port
+新增一些小功能
+* 增加`--prefix`前缀keys参数，用于过滤掉无用keys
+* 增加`--replace`参数，redis-port默认是跳过目标已存在的keys
+* 增加`--delete`参数，用于删除reids无用keys
+* 增加`stat`命令，用于统计redis中的各种keys的数量和占用空间。默认是去除数字进行统计，如：`uid:12`，`uid:13`会变成`uid:`这个key的统计，也可指定前缀
+* 增加`stat`命令，用于统计redis中的keys参数
+* `-t,--target`增加多实例，允许一台redis复制到多台redis中，走的是phpredis扩展的hash规则。
+
+redis-port
+------
 
 [![Build Status](https://travis-ci.org/CodisLabs/redis-port.svg)](https://travis-ci.org/CodisLabs/redis-port)
 
@@ -27,6 +39,12 @@ redis-port dump     [--ncpu=N]   --from=MASTER   [--password=PASSWORD]  [--outpu
 
 ```sh
 redis-port sync     [--ncpu=N]   --from=MASTER   [--password=PASSWORD]  --target=TARGET  [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]]  [--filterdb=DB]  [--psync] [--replace] [--delete] [--prefix=PREFIX]
+```
+
+* **STAT** 统计key长度，粗略的统计，会强制去除数字之后进行统计。
+
+```sh
+redis-port stat [--ncpu=N]   --from=MASTER   [--password=PASSWORD] [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]]  [--filterdb=DB]  [--psync] [--prefix=PREFIX]
 ```
 
 Options
@@ -66,6 +84,18 @@ Options
 + --filterdb=DB
 
 > filter specifed db number, default value is '*'
+
++ --prefix
+
+> 指定key前缀，只有符合该前缀的key才会进行操作，多个前缀以逗号(,)分割
+
++ --delete
+
+> 删除符合条件的key，用于批量删除无用的key
+
++ --replace
+
+> 替换目标已存在的key，默认是不进行替换
 
 Examples
 -------
@@ -123,8 +153,8 @@ $ ./redis-port dump -f 127.0.0.1:6379 | tee save.rdb | ./redis-port decode -o sa
 * **SYNC**
 
 ```sh
-$ ./redis-port sync -f 127.0.0.1:6379 -t 127.0.0.1:6380 -n 8
-  2014/10/28 15:15:41 [ncpu=8] sync from '127.0.0.1:6379' to '127.0.0.1:6380'
+$ ./redis-port sync -f 127.0.0.1:6379 -t 127.0.0.1:6380,127.0.0.1:6381 -n 8 --prefix=vckai,kai
+  2014/10/28 15:15:41 [ncpu=8] sync from '127.0.0.1:6379' to '127.0.0.1:6380,127.0.0.1:6381'
   2014/10/28 15:15:42 -
   2014/10/28 15:15:43 -
   2014/10/28 15:15:44 -

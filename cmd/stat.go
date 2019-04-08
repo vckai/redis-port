@@ -71,8 +71,7 @@ func (cmd *cmdStat) Main() {
 		log.Panic("invalid argument: prefix")
 	}
 
-	keys := strings.Split(args.prefix, ",")
-	for _, key := range keys {
+	for _, key := range args.preKeys {
 		cmd.stats = append(cmd.stats, newKeyStat(key))
 	}
 
@@ -252,9 +251,6 @@ func (cmd *cmdStat) statRDBFile(reader *bufio.Reader, nsize int64) {
 }
 
 func (cmd *cmdStat) statRdbEntry(e *rdb.BinEntry) {
-
-	// 过滤key前缀
-	// 统计指定前缀的keys
 	for _, stat := range cmd.stats {
 		if !strings.HasPrefix(string(e.Key), stat.key) {
 			continue

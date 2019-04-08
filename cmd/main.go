@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
@@ -13,6 +14,10 @@ import (
 	"github.com/CodisLabs/redis-port/pkg/libs/errors"
 	"github.com/CodisLabs/redis-port/pkg/libs/log"
 	"github.com/docopt/docopt-go"
+)
+
+const (
+	VERSION = "1.0.0"
 )
 
 var args struct {
@@ -29,6 +34,7 @@ var args struct {
 	replace bool
 	delete  bool
 	prefix  string
+	preKeys []string
 
 	version int
 
@@ -72,6 +78,7 @@ Usage:
 	redis-port dump     [--ncpu=N]  [--parallel=M]   --from=MASTER   [--password=PASSWORD]  [--output=OUTPUT]  [--extra]
 	redis-port sync     [--ncpu=N]  [--parallel=M]   --from=MASTER   [--password=PASSWORD]   --target=TARGET   [--auth=AUTH]  [--sockfile=FILE [--filesize=SIZE]] [--filterdb=DB] [--psync] [--replace] [--delete] [--prefix=PREFIX]
 	redis-port stat     [--ncpu=N]  [--parallel=M]   --from=MASTER   [--password=PASSWORD]   [--sockfile=FILE [--filesize=SIZE]] [--filterdb=DB] [--psync]  [--prefix=PREFIX]
+	redis-port version
 
 Options:
 	-n N, --ncpu=N                    Set runtime.GOMAXPROCS to N.
@@ -132,9 +139,17 @@ Options:
 	args.psync, _ = d["--psync"].(bool)
 	args.sockfile, _ = d["--sockfile"].(string)
 
+	// 新增参数
 	args.replace, _ = d["--replace"].(bool)
 	args.delete, _ = d["--delete"].(bool)
 	args.prefix, _ = d["--prefix"].(string)
+
+	if len(args.prefix) > 0 {
+		keys := strings.Split(args.prefix, ",")
+		for _, key := range keys {
+			args.preKeys = append(args.preKeys, key)
+		}
+	}
 
 	if s, ok := d["--faketime"].(string); ok && s != "" {
 		switch s[0] {
@@ -199,5 +214,7 @@ Options:
 		new(cmdSync).Main()
 	case d["stat"].(bool):
 		new(cmdStat).Main()
+	case d["version"].(bool):
+		fmt.Println("Version: ", VERSION)
 	}
 }
