@@ -1,0 +1,6 @@
+github.com/docopt/docopt-go v0.0.0-20141128170934-854c423c8108 h1:WJse1njqIlgvQjtOPAALBLhopGR+FKKo9OjxT7Sb6s0=
+github.com/docopt/docopt-go v0.0.0-20141128170934-854c423c8108/go.mod h1:WwZ+bS3ebgob9U8Nd0kOddGdZWjyMGR8Wziv+TBNwSE=
+github.com/garyburd/redigo v0.0.0-20151029235527-6ece6e0a09f2 h1:oPANGfJj1kUNthxd8FT6mvg/a1/P4IupFWjzxcTukjY=
+github.com/garyburd/redigo v0.0.0-20151029235527-6ece6e0a09f2/go.mod h1:NR3MbYisc3/PwhQ00EMzDiPmrwpPxAn5GI05/YaO1SY=
+github.com/spinlock/rdb v0.0.0-20160928043421-c0378accf333 h1:qKDIaZWPFNJLhECBBeYPDhH24uVqC+G6fUZJqggop8E=
+github.com/spinlock/rdb v0.0.0-20160928043421-c0378accf333/go.mod h1:6W89tty9V6SwblfH2XVbgNcwf+bs03bj8E9yy67cTnM=
